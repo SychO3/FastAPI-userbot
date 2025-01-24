@@ -5,3 +5,5 @@ python-dotenv
 uvicorn
 pydantic
 python-multipart
+redis
+ruff
