@@ -1,7 +1,7 @@
 import os
 import io
-from fastapi import FastAPI, HTTPException, Form, Depends, UploadFile, File
-from pyrogram import Client
+from fastapi import FastAPI, HTTPException, Form, Depends, UploadFile, File, Query
+from pyrogram import Client,types
 from pyrogram.enums import ChatMembersFilter
 from pyrogram.types import ChatPrivileges
 from pyrogram.errors import PeerIdInvalid, ChatAdminRequired, UserNotParticipant
@@ -24,17 +24,32 @@ API_HASH = os.getenv("API_HASH")
 PHONE_NUMBER = os.getenv("PHONE_NUMBER")
 SESSION_NAME = "my_session"
 SESSION_FILE = f"{SESSION_NAME}.session"
-app = FastAPI(title="FastAPI Telegram Group Manager Backend")
-
-pyro_client = Client(SESSION_NAME, api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER,workdir=os.getcwd())
+TOKEN = os.getenv("SECRET_TOKEN")
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(application: FastAPI):
     await pyro_client.start()
     yield
     await pyro_client.stop()
 
-app.router.lifespan_context = lifespan
+app = FastAPI(title="FastAPI Telegram Group Manager Backend", lifespan=lifespan)
+
+pyro_client = Client(SESSION_NAME, api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER,workdir=os.getcwd())
+
+@pyro_client.on_message()
+async def handle_message(client:Client, message:types.Message):
+    try:
+        if not message.from_user:
+            return
+
+
+        logging.info(f"Received message from [{message.from_user.full_name}] {message.from_user.username if message.from_user.username else message.from_user.id}")
+        
+
+        
+    except Exception as e:
+        logging.error(f"Error handling message: {str(e)}")
+
 ### Endpoints ###
 
 @app.post("/create_supergroup")
@@ -57,7 +72,7 @@ async def add_chat_members(request: AddChatMembersRequest, credentials: HTTPAuth
 @app.delete("/ban_chat_member")
 async def ban_chat_member(request: BanChatMemberRequest, credentials: HTTPAuthorizationCredentials = Depends(authenticate)):
     try:
-        result = await pyro_client.ban_chat_member(
+        await pyro_client.ban_chat_member(
             request.chat_id,
             request.user_id        )
         return {"status": "success"}
@@ -87,7 +102,8 @@ async def add_contact(request: AddContactRequest, credentials: HTTPAuthorization
     try:
         user = await pyro_client.add_contact(
             request.user_id,
-            request.first_name, 
+            request.first_name,
+            request.last_name
         )
         return {"user_id": user.id, "status": "success"}
     except UsernameNotOccupied:
@@ -103,14 +119,18 @@ async def promote_chat_member(request: PromoteChatMemberRequest, credentials: HT
         privileges = ChatPrivileges(
             can_manage_chat=request.can_manage_chat,
             can_delete_messages=request.can_delete_messages,
+            can_delete_stories=request.can_delete_stories,
             can_manage_video_chats=request.can_manage_video_chats,
             can_restrict_members=request.can_restrict_members,
             can_promote_members=request.can_promote_members,
             can_change_info=request.can_change_info,
             can_post_messages=request.can_post_messages,
+            can_post_stories=request.can_post_stories,
             can_edit_messages=request.can_edit_messages,
+            can_edit_stories=request.can_edit_stories,
             can_invite_users=request.can_invite_users,
             can_pin_messages=request.can_pin_messages,
+            can_manage_topics=request.can_manage_topics,
             is_anonymous=request.is_anonymous
         )
 
@@ -168,18 +188,32 @@ async def get_chat_members(request: GetChatMembersRequest, credentials: HTTPAuth
                 "restricted_by": member.restricted_by.username if member.restricted_by else None,
                 "is_member": member.is_member,
                 "can_be_edited": member.can_be_edited,
-                "permissions": member.permissions.to_dict() if member.permissions else None,
+                "subscription_until_date": member.subscription_until_date if member.subscription_until_date else None,
+                "permissions": {
+                    "can_send_messages": member.permissions.can_send_messages if member.permissions else None,
+                    "can_send_media_messages": member.permissions.can_send_media_messages if member.permissions else None,
+                    "can_send_polls": member.permissions.can_send_polls if member.permissions else None,
+                    "can_send_other_messages": member.permissions.can_send_other_messages if member.permissions else None,
+                    "can_add_web_page_previews": member.permissions.can_add_web_page_previews if member.permissions else None,
+                    "can_change_info": member.permissions.can_change_info if member.permissions else None,
+                    "can_invite_users": member.permissions.can_invite_users if member.permissions else None,
+                    "can_pin_messages": member.permissions.can_pin_messages if member.permissions else None,
+                    "can_manage_topics": member.permissions.can_manage_topics if member.permissions else None,
+                } if member.permissions else None,
                 "privileges": {
                     "can_manage_chat": member.privileges.can_manage_chat,
                     "can_delete_messages": member.privileges.can_delete_messages,
+                    "can_delete_stories": member.privileges.can_delete_stories,
                     "can_manage_video_chats": member.privileges.can_manage_video_chats,
                     "can_restrict_members": member.privileges.can_restrict_members,
                     "can_promote_members": member.privileges.can_promote_members,
                     "can_change_info": member.privileges.can_change_info,
                     "can_post_messages": member.privileges.can_post_messages,
                     "can_edit_messages": member.privileges.can_edit_messages,
+                    "can_edit_stories": member.privileges.can_edit_stories,
                     "can_invite_users": member.privileges.can_invite_users,
                     "can_pin_messages": member.privileges.can_pin_messages,
+                    "can_manage_topics": member.privileges.can_manage_topics,
                     "is_anonymous": member.privileges.is_anonymous
                 } if member.privileges else None            }
             members.append(member_dict)
@@ -236,6 +270,16 @@ async def get_dialogs(limit: int = Form(None), credentials: HTTPAuthorizationCre
                 "creator": dialog.chat.is_creator
             })
         return {"dialogs": dialogs}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/get_me")
+async def get_me(token: str = Query(...)):
+    try:
+        if token != TOKEN:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        me = await pyro_client.get_me()
+        return {"id": me.id, "username": me.username, "first_name": me.first_name, "last_name": me.last_name}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

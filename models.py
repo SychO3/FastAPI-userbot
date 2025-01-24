@@ -21,20 +21,25 @@ class SendMessageRequest(BaseModel):
 class AddContactRequest(BaseModel):
     user_id: int  
     first_name: str
+    last_name: str = None
 
 class PromoteChatMemberRequest(BaseModel):
     chat_id: int
     user_id: int
     can_manage_chat: bool = True
     can_delete_messages: bool = True
+    can_delete_stories: bool = True
     can_manage_video_chats: bool = True
     can_restrict_members: bool = True
     can_promote_members: bool = True
     can_change_info: bool = True
     can_post_messages: bool = True
+    can_post_stories: bool = True
     can_edit_messages: bool = True
+    can_edit_stories: bool = True
     can_invite_users: bool = True
     can_pin_messages: bool = True
+    can_manage_topics: bool = True
     is_anonymous: bool = False
  
 
