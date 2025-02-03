@@ -1,5 +1,6 @@
 import os
 import io
+import logging
 from fastapi import FastAPI, HTTPException, Form, Depends, UploadFile, File, Query
 from pyrogram import Client,types
 from pyrogram.enums import ChatMembersFilter
@@ -8,13 +9,12 @@ from pyrogram.errors import PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from contextlib import asynccontextmanager
 from fastapi.security import HTTPAuthorizationCredentials
 
-import logging
-logging.basicConfig(level=logging.INFO)
-
 from models import CreateSupergroupRequest, AddChatMembersRequest, BanChatMemberRequest, SendMessageRequest, AddContactRequest, PromoteChatMemberRequest, GetChatMembersRequest
 from errors import UserNotFoundError, GroupNotFoundError, UsernameNotOccupied
 from auth import authenticate
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO)
 
 ### Session setup ###
 load_dotenv()
