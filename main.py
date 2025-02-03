@@ -34,7 +34,7 @@ load_dotenv()
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
 PHONE_NUMBER = os.getenv("PHONE_NUMBER")
-SESSION_NAME = "my_session"
+SESSION_NAME = f"listener_{PHONE_NUMBER.replace('+', '')}"
 SESSION_FILE = f"{SESSION_NAME}.session"
 TOKEN = os.getenv("SECRET_TOKEN")
 MAIN_REDIS_KEY = f"listener:{PHONE_NUMBER.replace('+', '')}:"
@@ -74,9 +74,12 @@ async def handle_message(client: Client, message: types.Message):
         if not text:
             return
 
+        full_name = message.from_user.full_name
+        username = message.from_user.username
+        user_id = message.from_user.id
 
         logging.info(
-            f"Received message from [{message.from_user.full_name}] {message.from_user.username if message.from_user.username else message.from_user.id}"
+            f"Received message from [{full_name}] {username if username else user_id}"
         )
 
     except Exception as e:
@@ -264,9 +267,6 @@ async def get_chat_members(
                     "can_send_polls": member.permissions.can_send_polls
                     if member.permissions
                     else None,
-                    "can_send_other_messages": member.permissions.can_send_other_messages
-                    if member.permissions
-                    else None,
                     "can_add_web_page_previews": member.permissions.can_add_web_page_previews
                     if member.permissions
                     else None,
@@ -280,6 +280,39 @@ async def get_chat_members(
                     if member.permissions
                     else None,
                     "can_manage_topics": member.permissions.can_manage_topics
+                    if member.permissions
+                    else None,
+                    "can_send_audios": member.permissions.can_send_audios
+                    if member.permissions
+                    else None,
+                    "can_send_docs": member.permissions.can_send_docs
+                    if member.permissions
+                    else None,
+                    "can_send_games": member.permissions.can_send_games
+                    if member.permissions
+                    else None,
+                    "can_send_gifs": member.permissions.can_send_gifs
+                    if member.permissions
+                    else None,
+                    "can_send_inline": member.permissions.can_send_inline
+                    if member.permissions
+                    else None,
+                    "can_send_photos": member.permissions.can_send_photos
+                    if member.permissions
+                    else None,
+                    "can_send_plain": member.permissions.can_send_plain
+                    if member.permissions
+                    else None,
+                    "can_send_roundvideos": member.permissions.can_send_roundvideos
+                    if member.permissions
+                    else None,
+                    "can_send_stickers": member.permissions.can_send_stickers
+                    if member.permissions
+                    else None,
+                    "can_send_videos": member.permissions.can_send_videos
+                    if member.permissions
+                    else None,
+                    "can_send_voice": member.permissions.can_send_voices
                     if member.permissions
                     else None,
                 }
