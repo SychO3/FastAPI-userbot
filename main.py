@@ -7,14 +7,14 @@ from pyrogram.types import ChatPrivileges
 from pyrogram.errors import PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from contextlib import asynccontextmanager
 from fastapi.security import HTTPAuthorizationCredentials
-
-import logging
-logging.basicConfig(level=logging.INFO)
-
 from models import CreateSupergroupRequest, AddChatMembersRequest, BanChatMemberRequest, SendMessageRequest, AddContactRequest, PromoteChatMemberRequest, GetChatMembersRequest
 from errors import UserNotFoundError, GroupNotFoundError, UsernameNotOccupied
 from auth import authenticate
 from dotenv import load_dotenv
+import logging
+import uvicorn
+
+logging.basicConfig(level=logging.INFO)
 
 ### Session setup ###
 load_dotenv()
@@ -42,10 +42,15 @@ async def handle_message(client:Client, message:types.Message):
         if not message.from_user:
             return
 
+        if message.chat.type.value == "private":
+            return
+
+        text = message.text or message.caption
+
+        if not text:
+            return
 
         logging.info(f"Received message from [{message.from_user.full_name}] {message.from_user.username if message.from_user.username else message.from_user.id}")
-        
-
         
     except Exception as e:
         logging.error(f"Error handling message: {str(e)}")
@@ -284,5 +289,4 @@ async def get_me(token: str = Query(...)):
         raise HTTPException(status_code=400, detail=str(e))
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
