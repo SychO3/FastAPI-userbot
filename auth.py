@@ -2,13 +2,14 @@ import os
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-# Import your secret token 
+# Import your secret token
 from dotenv import load_dotenv
 
 load_dotenv()
 SECRET_TOKEN = os.getenv("SECRET_TOKEN")
 
 security = HTTPBearer()
+
 
 async def authenticate(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
