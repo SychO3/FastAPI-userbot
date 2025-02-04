@@ -42,31 +42,15 @@ MAIN_REDIS_KEY = f"listener:{PHONE_NUMBER.replace('+', '')}:"
 redis_client = aioredis.from_url(os.getenv("REDIS_URL"), decode_responses=True)
 
 
-@asynccontextmanager
-async def lifespan(application: FastAPI):
-    await pyro_client.start()
-    yield
-    await pyro_client.stop()
+pyro_client = None
 
 
-app = FastAPI(title="FastAPI Telegram Group Manager Backend", lifespan=lifespan)
-
-pyro_client = Client(
-    SESSION_NAME,
-    api_id=API_ID,
-    api_hash=API_HASH,
-    phone_number=PHONE_NUMBER,
-    workdir=os.getcwd(),
-)
-
-
-@pyro_client.on_message()
 async def handle_message(client: Client, message: types.Message):
     try:
         if not message.from_user:
             return
 
-        if message.chat.type.value == "private":
+        if message.from_user.is_self:
             return
 
         text = message.text or message.caption
@@ -79,11 +63,29 @@ async def handle_message(client: Client, message: types.Message):
         user_id = message.from_user.id
 
         logging.info(
-            f"Received message from [{full_name}] {username if username else user_id}"
+            f"Received message from {username} [{user_id}] ({full_name}): {text:.50}"
         )
-
     except Exception as e:
         logging.error(f"Error handling message: {str(e)}")
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    global pyro_client
+    pyro_client = Client(
+        SESSION_NAME,
+        api_id=API_ID,
+        api_hash=API_HASH,
+        phone_number=PHONE_NUMBER,
+        workdir=os.getcwd(),
+    )
+    pyro_client.on_message()(handle_message)
+    await pyro_client.start()
+    yield
+    await pyro_client.stop()
+
+
+app = FastAPI(title="FastAPI Telegram Group Manager Backend", lifespan=lifespan)
 
 
 ### Endpoints ###
@@ -421,8 +423,7 @@ async def get_me(token: str = Query(...)):
         return {
             "id": me.id,
             "username": me.username,
-            "first_name": me.first_name,
-            "last_name": me.last_name,
+            "full_name": me.full_name,
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

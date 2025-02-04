@@ -1,5 +1,5 @@
 fastapi
-pyrofork
+kurigram
 tgcrypto
 python-dotenv
 uvicorn
