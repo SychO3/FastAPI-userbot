@@ -4,7 +4,12 @@ from fastapi import FastAPI, HTTPException, Form, Depends, UploadFile, File, Que
 from pyrogram import Client, types
 from pyrogram.enums import ChatMembersFilter
 from pyrogram.types import ChatPrivileges
-from pyrogram.errors import PeerIdInvalid, ChatAdminRequired, UserNotParticipant
+from pyrogram.errors import (
+    PeerIdInvalid,
+    ChatAdminRequired,
+    UserNotParticipant,
+    InviteRequestSent,
+)
 from contextlib import asynccontextmanager
 from fastapi.security import HTTPAuthorizationCredentials
 from redis import asyncio as aioredis
@@ -43,7 +48,7 @@ MAIN_REDIS_KEY = f"listener:{PHONE_NUMBER.replace('+', '')}:"
 redis_client = aioredis.from_url(os.getenv("REDIS_URL"), decode_responses=True)
 
 
-pyro_client:Client = None
+pyro_client: Client = None
 
 
 async def handle_message(client: Client, message: types.Message):
@@ -61,7 +66,7 @@ async def handle_message(client: Client, message: types.Message):
 
         if message.chat.type.value == "private":
             return
-        
+
         if message.from_user.is_bot:
             return
 
@@ -84,7 +89,6 @@ async def handle_message(client: Client, message: types.Message):
         is_push = False
 
         for keyword in keywords:
-
             is_active = keyword.get("is_active", False)
             if not is_active:
                 continue
@@ -100,7 +104,10 @@ async def handle_message(client: Client, message: types.Message):
             message_text = message.text or message.caption or ""
             if match_pattern == "exact" and target_keyword in message_text:
                 is_push = True
-            elif match_pattern == "fuzzy" and target_keyword.lower() in message_text.lower():
+            elif (
+                match_pattern == "fuzzy"
+                and target_keyword.lower() in message_text.lower()
+            ):
                 is_push = True
 
             # 如果需要检查用户名且消息没有用户名，则跳过
@@ -125,20 +132,19 @@ async def handle_message(client: Client, message: types.Message):
                     "user_id": message.from_user.id,
                     "text": message_text,
                     "date": message.date.timestamp(),
-                    "matched_keyword": target_keyword
+                    "matched_keyword": target_keyword,
                 }
-                
+
                 # 使用Redis列表存储待推送消息
                 push_key = f"listener:push:messages:{user_id}"
                 await redis_client.rpush(push_key, json.dumps(push_data))
-                
+
                 # 设置过期时间 24小时
                 await redis_client.expire(push_key, 24 * 60 * 60)
 
                 logging.info(f"Pushed message to user {user_id}")
 
                 break  # 匹配成功一次后就退出循环
-
 
     except Exception as e:
         logging.error(f"Error handling message: {str(e)}")
@@ -514,6 +520,8 @@ async def join_chat(
         return {"status": "success", "message": f"Successfully joined {chat.title}"}
     except PeerIdInvalid:
         raise HTTPException(status_code=404, detail="Chat not found")
+    except InviteRequestSent:
+        return {"status": "verify", "message": "Invite request sent"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
