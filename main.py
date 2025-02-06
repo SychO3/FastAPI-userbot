@@ -59,6 +59,12 @@ async def handle_message(client: Client, message: types.Message):
         if not text:
             return
 
+        if message.chat.type.value == "private":
+            return
+        
+        if message.from_user.is_bot:
+            return
+
         full_name = message.from_user.full_name
         username = message.from_user.username
         user_id = message.from_user.id
