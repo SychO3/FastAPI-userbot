@@ -1,6 +1,5 @@
 import os
 import io
-from click.core import F
 from fastapi import FastAPI, HTTPException, Form, Depends, UploadFile, File, Query
 from pyrogram import Client, types
 from pyrogram.enums import ChatMembersFilter
