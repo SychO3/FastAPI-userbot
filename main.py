@@ -1,5 +1,6 @@
 import os
 import io
+from click.core import F
 from fastapi import FastAPI, HTTPException, Form, Depends, UploadFile, File, Query
 from pyrogram import Client, types
 from pyrogram.enums import ChatMembersFilter
@@ -8,6 +9,7 @@ from pyrogram.errors import PeerIdInvalid, ChatAdminRequired, UserNotParticipant
 from contextlib import asynccontextmanager
 from fastapi.security import HTTPAuthorizationCredentials
 from redis import asyncio as aioredis
+import json
 
 import logging
 
@@ -42,7 +44,7 @@ MAIN_REDIS_KEY = f"listener:{PHONE_NUMBER.replace('+', '')}:"
 redis_client = aioredis.from_url(os.getenv("REDIS_URL"), decode_responses=True)
 
 
-pyro_client = None
+pyro_client:Client = None
 
 
 async def handle_message(client: Client, message: types.Message):
@@ -65,6 +67,74 @@ async def handle_message(client: Client, message: types.Message):
         logging.info(
             f"Received message from {username} [{user_id}] ({full_name}): {text:.50}"
         )
+
+        key = "listener:keywords"
+        keywords = await redis_client.get(key)
+
+        if not keywords:
+            return
+
+        keywords = json.loads(keywords)
+
+        is_push = False
+
+        for keyword in keywords:
+
+            is_active = keyword.get("is_active", False)
+            if not is_active:
+                continue
+
+            # 获取关键词匹配参数
+            match_pattern = keyword.get("match_pattern", "exact")
+            word_limit = keyword.get("word_limit", 0)
+            has_username = keyword.get("has_username", 0)
+            target_keyword = keyword.get("keyword", "")
+            user_id = keyword.get("user_id")
+
+            # 根据匹配模式进行匹配
+            message_text = message.text or message.caption or ""
+            if match_pattern == "exact" and target_keyword in message_text:
+                is_push = True
+            elif match_pattern == "fuzzy" and target_keyword.lower() in message_text.lower():
+                is_push = True
+
+            # 如果需要检查用户名且消息没有用户名，则跳过
+            if has_username and not message.from_user.username:
+                continue
+
+            # 如果有字数限制且不满足，则跳过
+            if word_limit > 0 and len(message_text.split()) < word_limit:
+                continue
+
+            # 如果匹配成功，保存到Redis
+            if is_push:
+                push_data = {
+                    "message_id": message.id,
+                    "message_link": message.link,
+                    "chat_title": message.chat.title,
+                    "chat_username": message.chat.username,
+                    "chat_type": message.chat.type.value,
+                    "chat_id": message.chat.id,
+                    "user_name": message.from_user.username,
+                    "user_full_name": message.from_user.full_name,
+                    "user_id": message.from_user.id,
+                    "text": message_text,
+                    "date": message.date.timestamp(),
+                    "matched_keyword": target_keyword
+                }
+                
+                # 使用Redis列表存储待推送消息
+                push_key = f"listener:push:messages:{user_id}"
+                await redis_client.rpush(push_key, json.dumps(push_data))
+                
+                # 设置过期时间 24小时
+                await redis_client.expire(push_key, 24 * 60 * 60)
+
+                logging.info(f"Pushed message to user {user_id}")
+
+                break  # 匹配成功一次后就退出循环
+
+
     except Exception as e:
         logging.error(f"Error handling message: {str(e)}")
 
